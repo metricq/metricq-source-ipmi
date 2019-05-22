@@ -7,7 +7,6 @@ import click_log
 
 import metricq
 from metricq.logging import get_logger
-from test_conf import test_configs  # FIXME: for development only!
 
 NaN = float('nan')
 
@@ -21,10 +20,20 @@ logger.handlers[0].formatter = logging.Formatter(
     fmt='%(asctime)s [%(levelname)-8s] [%(name)-20s] %(message)s')
 
 
-async def ipmi_sensors(hosts_string, username, password, record_ids=None):
+async def ipmi_sensors(hosts_list, username, password, record_ids=None):
+    """call ipmi-sensors and parse the output
+
+    :param hosts_list: List of hosts to be queried
+    :param username: user name to query data
+    :param password: password to query data
+    :param record_ids: ids of the records that are queried
+    :return: list of the parsed output table of ipmi-sensors
+    """
+
+    nodeset = NodeSet().fromlist(hosts_list)
     param = [
         'ipmi-sensors',
-        '-h', hosts_string,
+        '-h', str(nodeset),
         '-u', username,
         '-p', password,
         '--no-header-output',
@@ -47,9 +56,25 @@ async def ipmi_sensors(hosts_string, username, password, record_ids=None):
 
 
 async def get_ipmi_reading(cfg):
-    hosts_string = str.join(", ", cfg['hosts_names'].keys())
+    """
+
+    :param cfg: config dict with:
+                    hosts_names: dict:
+                        key= host
+                        value= name of the host
+                    username: str username
+                    password: str password
+                    record_ids: set with the record_ids
+                    sensor_names: dict:
+                        key= sensor name
+                        value= sensor metric name without host
+    :return:
+            dict:
+                key= metric name
+                value= timestamp, "value"
+    """
     query_timestamp = metricq.Timestamp.now()
-    parsed_output = await ipmi_sensors(hosts_string, cfg['username'], cfg['password'], cfg['record_ids'])
+    parsed_output = await ipmi_sensors(cfg['hosts_names'].keys(), cfg['username'], cfg['password'], cfg['record_ids'])
     ret = {}
     for row in parsed_output:
         sensor = row[1]
@@ -76,7 +101,7 @@ async def get_ipmi_reading(cfg):
 
 
 async def get_record_ids(hosts, sensors, username, password):
-    parsed_output = await ipmi_sensors(str.join(',', hosts), username, password)
+    parsed_output = await ipmi_sensors(hosts, username, password)
     ret = set()
     for row in parsed_output:
         if row[1] in sensors:
@@ -109,7 +134,6 @@ class IpmiSource(metricq.IntervalSource):
     async def _on_config(self, **config):
         rate = config.get('rate', 0.2)
         self.period = 1 / rate
-        config = test_configs  # FIXME: remove in the future
         self.config_optimized = []
         metrics = {}
         for cfg in config['ipmi_hosts']:
@@ -156,10 +180,9 @@ class IpmiSource(metricq.IntervalSource):
             for data_row in data:
                 for metric_name in data_row:
                     ts, value = data_row[metric_name]
-                    print(metric_name, ts, value)
                     send_metrics.append(self[metric_name].send(ts, value))
-            #if send_metrics:
-            #    await asyncio.gather(*send_metrics)
+            if send_metrics:
+                await asyncio.gather(*send_metrics)
             logger.info("sent {} metrics".format(len(send_metrics)))
 
 
