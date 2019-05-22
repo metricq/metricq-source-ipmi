@@ -10,4 +10,4 @@ setup(name='metricq_source_ipmi',
       [console_scripts]
       metricq-source-ipmi=metricq_source_ipmi:run
       ''',
-      install_requires=['aiomonitor', 'click', 'click_log', 'metricq'])
+      install_requires=['aiomonitor', 'click', 'click_log', 'metricq', 'clustershell'])
