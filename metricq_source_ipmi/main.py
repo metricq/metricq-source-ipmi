@@ -5,6 +5,7 @@ import click
 from ClusterShell.NodeSet import NodeSet
 import click_log
 
+from test_conf import test_configs
 import metricq
 from metricq.logging import get_logger
 
@@ -18,6 +19,18 @@ logger.addHandler(sh)
 logger.setLevel('INFO')
 logger.handlers[0].formatter = logging.Formatter(
     fmt='%(asctime)s [%(levelname)-8s] [%(name)-20s] %(message)s')
+
+
+def gcd(a, b):
+    """Return greatest common divisor using Euclid's Algorithm."""
+    while b:
+        a, b = b, a % b
+    return a
+
+
+def lcm(a, b):
+    """Return lowest common multiple."""
+    return a * b // gcd(a, b)
 
 
 async def ipmi_sensors(hosts_list, username, password, record_ids=None):
@@ -55,8 +68,8 @@ async def ipmi_sensors(hosts_list, username, password, record_ids=None):
     return output
 
 
-async def get_ipmi_reading(cfg):
-    """
+async def get_ipmi_reading(cfg, current_iteration):
+    """queries the host data and converts it to metrics
 
     :param cfg: config dict with:
                     hosts_names: dict:
@@ -64,52 +77,54 @@ async def get_ipmi_reading(cfg):
                         value= name of the host
                     username: str username
                     password: str password
-                    record_ids: set with the record_ids
-                    sensor_names: dict:
+                    sensors: dict:
                         key= sensor name
-                        value= sensor metric name without host
+                        value= dict:
+                            metric_name= sensor metric name without host
+                            interval= interval
+                            record_ids= the record ids of the Sensor
+    :param current_iteration: int of the current iteration
     :return:
             dict:
                 key= metric name
                 value= timestamp, "value"
     """
     query_timestamp = metricq.Timestamp.now()
-    parsed_output = await ipmi_sensors(cfg['hosts_names'].keys(), cfg['username'], cfg['password'], cfg['record_ids'])
+    record_ids = set()
+    sensor_names = {}
+    for sensor in cfg['sensors']:
+        if current_iteration % cfg['sensors'][sensor]['interval'] == 0:
+            sensor_names[sensor] = cfg['sensors'][sensor]['metric_name']
+            record_ids.update(cfg['sensors'][sensor]['record_ids'])
+    parsed_output = await ipmi_sensors(cfg['hosts_names'].keys(), cfg['username'], cfg['password'], record_ids)
     ret = {}
     for row in parsed_output:
         sensor = row[1]
-        if sensor in cfg['sensor_names']:
+        if sensor in sensor_names:
             if len(row[0]) > 1:
                 name = cfg['hosts_names'][row[0][0]]
             else:
                 name = next(iter(cfg['hosts_names'].values()))
             metric_name = '{}.{}'.format(
-                name, cfg['sensor_names'][sensor]
+                name, cfg['sensors'][sensor]['metric_name']
             )
             value = float(row[3])
             ret[metric_name] = (query_timestamp, value)
-
-    if len(cfg['sensor_names'])*len(cfg['hosts_names']) > len(ret):
+    if len(sensor_names)*len(cfg['hosts_names']) > len(ret):
         for host_name in cfg['hosts_names'].values():
-            for sensor in cfg['sensor_names'].values():
+            for sensor in cfg['sensors'].values():
                 metric_name = '{}.{}'.format(
-                    host_name, sensor
+                    host_name, sensor['metric_name']
                 )
                 if metric_name not in ret:
                     ret[metric_name] = (query_timestamp, NaN)
     return ret
 
 
-async def get_record_ids(hosts, sensors, username, password):
-    parsed_output = await ipmi_sensors(hosts, username, password)
-    ret = set()
-    for row in parsed_output:
-        if row[1] in sensors:
-            if len(row[0]) > 1:
-                ret.add(row[0][1])
-            else:
-                ret.add(row[0][0])
-    return ret
+def search_sensor_unit(parsed_conf, name):
+    for row in parsed_conf:
+        if row[1] == name:
+            return row[-2]
 
 
 def get_list_from_conf(obj):
@@ -132,9 +147,12 @@ class IpmiSource(metricq.IntervalSource):
 
     @metricq.rpc_handler('config')
     async def _on_config(self, **config):
-        rate = config.get('rate', 0.2)
-        self.period = 1 / rate
+        config = test_configs
+        config.get('rate', 0.2)
+        self.period = 1
         self.config_optimized = []
+        self.current_iteration = 0
+        self.lcm = 1
         metrics = {}
         for cfg in config['ipmi_hosts']:
             updated_conf = {}
@@ -145,25 +163,42 @@ class IpmiSource(metricq.IntervalSource):
                 updated_conf['username'] = cfg['username']
                 updated_conf['password'] = cfg['password']
                 updated_conf['hosts_names'] = dict(zip(hosts, names))
-                updated_conf['sensor_names'] = {}
+                updated_conf['sensors'] = {}
+                parsed_output = await ipmi_sensors(hosts, cfg['username'], cfg['password'],)
                 for name in names:
                     for sensor in cfg['sensors']:
                         metric_name = '{}.{}'.format(
                             name,
                             sensor
                         )
-                        updated_conf['sensor_names'][cfg['sensors'][sensor]['name']] = sensor
-                        metrics[metric_name] = {'rate': rate}
-                updated_conf['record_ids'] = await get_record_ids(
-                    hosts,
-                    updated_conf['sensor_names'].keys(),
-                    cfg['username'],
-                    cfg['password']
-                )
+                        interval = int(cfg['sensors'][sensor].get('interval', config.get('interval', 1)))
+                        updated_conf['sensors'][cfg['sensors'][sensor]['name']] = {
+                            'metric_name': sensor,
+                            'interval': interval,
+                        }
+                        self.lcm = lcm(
+                            self.lcm,
+                            interval
+                        )
+                        metrics[metric_name] = {
+                            'rate': interval,
+                            'unit': cfg['sensors'][sensor].get(
+                                    'unit',
+                                    search_sensor_unit(parsed_output, cfg['sensors'][sensor]['name'])
+                                )
+                        }
+                for row in parsed_output:
+                    if row[1] in updated_conf['sensors'].keys():
+                        if 'record_ids' not in updated_conf['sensors'][row[1]].keys():
+                            updated_conf['sensors'][row[1]]['record_ids'] = []
+                        if len(row[0]) > 1:
+                            updated_conf['sensors'][row[1]]['record_ids'].append(row[0][1])
+                        else:
+                            updated_conf['sensors'][row[1]]['record_ids'].append(row[0][0])
                 self.config_optimized.append(updated_conf)
 
             else:
-                logger.error('ERROR number of names and hosts different in {} '.format(cfg))
+                logger.error('number of names and hosts different in {} '.format(cfg))
                 self.config_optimized = {}
         await self.declare_metrics(metrics)
         logger.info("declared {} metrics".format(len(metrics)))
@@ -171,7 +206,8 @@ class IpmiSource(metricq.IntervalSource):
     async def update(self):
         jobs = []
         for cfg in self.config_optimized:
-            jobs.append(get_ipmi_reading(cfg))
+            if any(self.current_iteration % cfg['sensors'][sensor]['interval'] == 0 for sensor in cfg['sensors']):
+                jobs.append(get_ipmi_reading(cfg, self.current_iteration))
         data = []
         if jobs:
             data = await asyncio.gather(*jobs)
@@ -184,6 +220,9 @@ class IpmiSource(metricq.IntervalSource):
             if send_metrics:
                 await asyncio.gather(*send_metrics)
             logger.info("sent {} metrics".format(len(send_metrics)))
+        if self.current_iteration == self.lcm:
+            self.current_iteration = 0
+        self.current_iteration += 1
 
 
 @click.command()
