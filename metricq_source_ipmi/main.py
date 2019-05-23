@@ -6,7 +6,6 @@ import click
 from ClusterShell.NodeSet import NodeSet
 import click_log
 
-from test_conf import test_configs
 import metricq
 from metricq.logging import get_logger
 
@@ -141,7 +140,6 @@ class IpmiSource(metricq.IntervalSource):
 
     @metricq.rpc_handler('config')
     async def _on_config(self, **config):
-        config = test_configs
         config.get('rate', 0.2)
         self.period = 1
         self.config_optimized = []
