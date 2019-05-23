@@ -152,42 +152,46 @@ class IpmiSource(metricq.IntervalSource):
             names = get_list_from_conf(cfg['names'])
 
             if len(hosts) == len(names):
-                updated_conf['username'] = cfg['username']
-                updated_conf['password'] = cfg['password']
-                updated_conf['hosts_names'] = dict(zip(hosts, names))
-                updated_conf['sensors'] = {}
                 parsed_output = await ipmi_sensors(hosts, cfg['username'], cfg['password'],)
-                for name in names:
-                    for sensor in cfg['sensors']:
-                        metric_name = '{}.{}'.format(
-                            name,
-                            sensor
-                        )
-                        interval = int(cfg['sensors'][sensor].get('interval', config.get('interval', 1)))
-                        updated_conf['sensors'][cfg['sensors'][sensor]['name']] = {
-                            'metric_name': sensor,
-                            'interval': interval,
-                        }
-                        self.lcm = lcm(
-                            self.lcm,
-                            interval
-                        )
-                        metrics[metric_name] = {
-                            'rate': interval,
-                            'unit': cfg['sensors'][sensor].get(
-                                    'unit',
-                                    search_sensor_unit(parsed_output, cfg['sensors'][sensor]['name'])
-                                )
-                        }
-                for row in parsed_output:
-                    if row[1] in updated_conf['sensors'].keys():
-                        if 'record_ids' not in updated_conf['sensors'][row[1]].keys():
-                            updated_conf['sensors'][row[1]]['record_ids'] = []
-                        if len(row[0]) > 1:
-                            updated_conf['sensors'][row[1]]['record_ids'].append(row[0][1])
-                        else:
-                            updated_conf['sensors'][row[1]]['record_ids'].append(row[0][0])
-                self.config_optimized.append(updated_conf)
+                if parsed_output:
+                    updated_conf['username'] = cfg['username']
+                    updated_conf['password'] = cfg['password']
+                    updated_conf['hosts_names'] = dict(zip(hosts, names))
+                    updated_conf['sensors'] = {}
+
+                    for name in names:
+                        for sensor in cfg['sensors']:
+                            metric_name = '{}.{}'.format(
+                                name,
+                                sensor
+                            )
+                            interval = int(cfg['sensors'][sensor].get('interval', config.get('interval', 1)))
+                            updated_conf['sensors'][cfg['sensors'][sensor]['name']] = {
+                                'metric_name': sensor,
+                                'interval': interval,
+                            }
+                            self.lcm = lcm(
+                                self.lcm,
+                                interval
+                            )
+                            metrics[metric_name] = {
+                                'rate': interval,
+                                'unit': cfg['sensors'][sensor].get(
+                                        'unit',
+                                        search_sensor_unit(parsed_output, cfg['sensors'][sensor]['name'])
+                                    )
+                            }
+                    for row in parsed_output:
+                        if row[1] in updated_conf['sensors'].keys():
+                            if 'record_ids' not in updated_conf['sensors'][row[1]].keys():
+                                updated_conf['sensors'][row[1]]['record_ids'] = []
+                            if len(row[0]) > 1:
+                                updated_conf['sensors'][row[1]]['record_ids'].append(row[0][1])
+                            else:
+                                updated_conf['sensors'][row[1]]['record_ids'].append(row[0][0])
+                    self.config_optimized.append(updated_conf)
+                else:
+                    logger.error('no output of ipmi_sensors]')
 
             else:
                 logger.error('number of names and hosts different in {} '.format(cfg))
@@ -202,7 +206,9 @@ class IpmiSource(metricq.IntervalSource):
                 jobs.append(get_ipmi_reading(cfg, self.current_iteration))
         data = []
         if jobs:
+            logger.info('start {} get_ipmi_reading jobs'.format(len(jobs)))
             data = await asyncio.gather(*jobs)
+            logger.info('jobs finished')
         send_metrics = []
         if data:
             for data_row in data:
