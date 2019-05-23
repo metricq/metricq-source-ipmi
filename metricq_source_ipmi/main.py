@@ -1,3 +1,4 @@
+import math
 import logging
 import logging.handlers
 import asyncio
@@ -21,16 +22,9 @@ logger.handlers[0].formatter = logging.Formatter(
     fmt='%(asctime)s [%(levelname)-8s] [%(name)-20s] %(message)s')
 
 
-def gcd(a, b):
-    """Return greatest common divisor using Euclid's Algorithm."""
-    while b:
-        a, b = b, a % b
-    return a
-
-
 def lcm(a, b):
     """Return lowest common multiple."""
-    return a * b // gcd(a, b)
+    return a * b // math.gcd(a, b)
 
 
 async def ipmi_sensors(hosts_list, username, password, record_ids=None):
