@@ -227,4 +227,4 @@ def run(server, token):
 
 
 if __name__ == '__main__':
-    source()
+    run()
