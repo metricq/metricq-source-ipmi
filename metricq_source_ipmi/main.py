@@ -221,7 +221,7 @@ class IpmiSource(metricq.IntervalSource):
 @click.option('--server', default='amqp://localhost/')
 @click.option('--token', default='source-ipmi')
 @click_log.simple_verbosity_option(logger)
-def source(server, token):
+def run(server, token):
     src = IpmiSource(token=token, management_url=server)
     src.run()
 
