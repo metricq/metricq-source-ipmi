@@ -128,76 +128,99 @@ def get_list_from_conf(obj):
         return obj
 
 
+def create_upd_conf_and_metrics(cfg, hosts, names, parsed_output, conf_interval):
+    updated_conf = {}
+    metrics = {}
+    updated_conf['username'] = cfg['username']
+    updated_conf['password'] = cfg['password']
+    updated_conf['hosts_names'] = dict(zip(hosts, names))
+    updated_conf['sensors'] = {}
+    current_lcm = 1
+    for name in names:
+        for sensor in cfg['sensors']:
+            metric_name = '{}.{}'.format(
+                name,
+                sensor
+            )
+            interval = int(cfg['sensors'][sensor].get('interval', conf_interval))
+            updated_conf['sensors'][cfg['sensors'][sensor]['name']] = {
+                'metric_name': sensor,
+                'interval': interval,
+                'record_ids': set()
+            }
+
+            current_lcm = lcm(current_lcm, interval)
+            metrics[metric_name] = {
+                'rate': interval,
+                'unit': cfg['sensors'][sensor].get(
+                    'unit',
+                    search_sensor_unit(parsed_output, cfg['sensors'][sensor]['name'])
+                )
+            }
+    for row in parsed_output:
+        if row[1] in updated_conf['sensors'].keys():
+            if len(row[0]) > 1:
+                updated_conf['sensors'][row[1]]['record_ids'].add(row[0][1])
+            else:
+                updated_conf['sensors'][row[1]]['record_ids'].add(row[0][0])
+
+    return metrics, updated_conf, current_lcm
+
+
 class IpmiSource(metricq.IntervalSource):
     def __init__(self, *args, **kwargs):
         logger.info("initializing IpmiSource")
         super().__init__(*args, **kwargs)
         self.period = None
         self.config_optimized = None
+        self.current_iteration = 0
+        self.lcm = 1
+        self.retry_intervals = [5, 20, 60, 300]
+        self.number_of_trys = 0
         watcher = asyncio.FastChildWatcher()
         watcher.attach_loop(self.event_loop)
         asyncio.set_child_watcher(watcher)
 
-    @metricq.rpc_handler('config')
-    async def _on_config(self, **config):
-        config.get('rate', 0.2)
-        self.period = 1
+    async def try_declare_metrics(self, config):
         self.config_optimized = []
         self.current_iteration = 0
         self.lcm = 1
         metrics = {}
         for cfg in config['ipmi_hosts']:
-            updated_conf = {}
+            self.number_of_trys = 0
             hosts = get_list_from_conf(cfg['hosts'])
             names = get_list_from_conf(cfg['names'])
-
             if len(hosts) == len(names):
-                parsed_output = await ipmi_sensors(hosts, cfg['username'], cfg['password'],)
-                if parsed_output:
-                    updated_conf['username'] = cfg['username']
-                    updated_conf['password'] = cfg['password']
-                    updated_conf['hosts_names'] = dict(zip(hosts, names))
-                    updated_conf['sensors'] = {}
-
-                    for name in names:
-                        for sensor in cfg['sensors']:
-                            metric_name = '{}.{}'.format(
-                                name,
-                                sensor
-                            )
-                            interval = int(cfg['sensors'][sensor].get('interval', config.get('interval', 1)))
-                            updated_conf['sensors'][cfg['sensors'][sensor]['name']] = {
-                                'metric_name': sensor,
-                                'interval': interval,
-                            }
-                            self.lcm = lcm(
-                                self.lcm,
-                                interval
-                            )
-                            metrics[metric_name] = {
-                                'rate': interval,
-                                'unit': cfg['sensors'][sensor].get(
-                                        'unit',
-                                        search_sensor_unit(parsed_output, cfg['sensors'][sensor]['name'])
-                                    )
-                            }
-                    for row in parsed_output:
-                        if row[1] in updated_conf['sensors'].keys():
-                            if 'record_ids' not in updated_conf['sensors'][row[1]].keys():
-                                updated_conf['sensors'][row[1]]['record_ids'] = []
-                            if len(row[0]) > 1:
-                                updated_conf['sensors'][row[1]]['record_ids'].append(row[0][1])
-                            else:
-                                updated_conf['sensors'][row[1]]['record_ids'].append(row[0][0])
-                    self.config_optimized.append(updated_conf)
-                else:
-                    logger.error('no output of ipmi_sensors]')
-
+                parsed_output = []
+                while not parsed_output:
+                    parsed_output = await ipmi_sensors(hosts, cfg['username'], cfg['password'], )
+                    if parsed_output:
+                        metrics, updated_conf, new_lcm = create_upd_conf_and_metrics(
+                            cfg,
+                            hosts,
+                            names,
+                            parsed_output,
+                            config.get('interval', 1)
+                        )
+                        self.lcm = lcm(self.lcm, new_lcm)
+                        self.config_optimized.append(updated_conf)
+                    else:
+                        sleep_interval = min(self.number_of_trys, len(self.retry_intervals) - 1)
+                        logger.error('no output of ipmi_sensors try again in {} sec]'.format(
+                            self.retry_intervals[sleep_interval])
+                        )
+                        self.number_of_trys += 1
+                        await asyncio.sleep(self.retry_intervals[sleep_interval])
             else:
                 logger.error('number of names and hosts different in {} '.format(cfg))
                 self.config_optimized = {}
-        await self.declare_metrics(metrics)
-        logger.info("declared {} metrics".format(len(metrics)))
+            await self.declare_metrics(metrics)
+            logger.info("declared {} metrics".format(len(metrics)))
+
+    @metricq.rpc_handler('config')
+    async def _on_config(self, **config):
+        self.period = 1
+        await self.try_declare_metrics(config)
 
     async def update(self):
         jobs = []
