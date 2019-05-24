@@ -172,55 +172,57 @@ class IpmiSource(metricq.IntervalSource):
         logger.info("initializing IpmiSource")
         super().__init__(*args, **kwargs)
         self.period = None
-        self.config_optimized = None
+        self.config_optimized = []
         self.current_iteration = 0
         self.lcm = 1
         self.retry_intervals = [5, 20, 60, 300]
-        self.number_of_trys = 0
         watcher = asyncio.FastChildWatcher()
         watcher.attach_loop(self.event_loop)
         asyncio.set_child_watcher(watcher)
 
-    async def try_declare_metrics(self, config):
-        self.config_optimized = []
-        self.current_iteration = 0
-        self.lcm = 1
+    async def declare_metrics_per_host(self, cfg, interval):
         metrics = {}
-        for cfg in config['ipmi_hosts']:
-            self.number_of_trys = 0
-            hosts = get_list_from_conf(cfg['hosts'])
-            names = get_list_from_conf(cfg['names'])
-            if len(hosts) == len(names):
-                parsed_output = []
-                while not parsed_output:
-                    parsed_output = await ipmi_sensors(hosts, cfg['username'], cfg['password'], )
-                    if parsed_output:
-                        metrics, updated_conf, new_lcm = create_upd_conf_and_metrics(
-                            cfg,
-                            hosts,
-                            names,
-                            parsed_output,
-                            config.get('interval', 1)
-                        )
-                        self.lcm = lcm(self.lcm, new_lcm)
-                        self.config_optimized.append(updated_conf)
-                    else:
-                        sleep_interval = min(self.number_of_trys, len(self.retry_intervals) - 1)
-                        logger.error('no output of ipmi_sensors try again in {} sec]'.format(
-                            self.retry_intervals[sleep_interval])
-                        )
-                        self.number_of_trys += 1
-                        await asyncio.sleep(self.retry_intervals[sleep_interval])
-            else:
-                logger.error('number of names and hosts different in {} '.format(cfg))
-                self.config_optimized = {}
-            await self.declare_metrics(metrics)
-            logger.info("declared {} metrics".format(len(metrics)))
+        number_of_trys = 0
+        hosts = get_list_from_conf(cfg['hosts'])
+        names = get_list_from_conf(cfg['names'])
+        if len(hosts) == len(names):
+            parsed_output = []
+            while not parsed_output:
+                parsed_output = await ipmi_sensors(hosts, cfg['username'], cfg['password'], )
+                if parsed_output:
+                    metrics, updated_conf, new_lcm = create_upd_conf_and_metrics(
+                        cfg,
+                        hosts,
+                        names,
+                        parsed_output,
+                        interval
+                    )
+                    self.lcm = lcm(self.lcm, new_lcm)
+                    self.config_optimized.append(updated_conf)
+                else:
+                    sleep_interval = min(number_of_trys, len(self.retry_intervals) - 1)
+                    logger.error('no output of ipmi_sensors try again in {} sec]'.format(
+                        self.retry_intervals[sleep_interval])
+                    )
+                    number_of_trys += 1
+                    await asyncio.sleep(self.retry_intervals[sleep_interval])
+        else:
+            logger.error('number of names and hosts different in {} '.format(cfg))
+            self.config_optimized = []
+        await self.declare_metrics(metrics)
+        logger.info("declared {} metrics".format(len(metrics)))
 
     @metricq.rpc_handler('config')
     async def _on_config(self, **config):
         self.period = 1
-        await self.try_declare_metrics(config)
+        self.config_optimized = []
+        self.current_iteration = 0
+        self.lcm = 1
+        jobs = []
+        for cfg in config['ipmi_hosts']:
+            jobs.append(self.declare_metrics_per_host(cfg, config.get('interval', 1)))
+        if jobs:
+            await asyncio.gather(*jobs)
 
     async def update(self):
         jobs = []
