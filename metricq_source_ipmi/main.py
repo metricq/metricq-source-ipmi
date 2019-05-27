@@ -3,12 +3,13 @@ import logging
 import logging.handlers
 import asyncio
 import click
-from ClusterShell.NodeSet import NodeSet
 import click_log
 
 import metricq
 from metricq.logging import get_logger
+import hostlist
 
+IPMI_SENSORS = 'ipmi-sensors'
 NaN = float('nan')
 
 logger = get_logger()
@@ -36,10 +37,10 @@ async def ipmi_sensors(hosts_list, username, password, record_ids=None):
     :return: list of the parsed output table of ipmi-sensors
     """
 
-    nodeset = NodeSet().fromlist(hosts_list)
+    hosts = hostlist.collect_hostlist(hosts_list)
     param = [
-        'ipmi-sensors',
-        '-h', str(nodeset),
+        IPMI_SENSORS,
+        '-h', hosts,
         '-u', username,
         '-p', password,
         '--no-header-output',
@@ -101,7 +102,11 @@ async def get_ipmi_reading(cfg, current_iteration):
             metric_name = '{}.{}'.format(
                 name, cfg['sensors'][sensor]['metric_name']
             )
-            value = float(row[3])
+            try:
+                value = float(row[3])
+            except ValueError:
+                logger.error('ValueError by {} from {}'.format(sensor, name))
+                value = NaN
             ret[metric_name] = (query_timestamp, value)
     if len(sensor_names)*len(cfg['hosts_names']) > len(ret):
         for host_name in cfg['hosts_names'].values():
@@ -122,8 +127,7 @@ def search_sensor_unit(parsed_conf, name):
 
 def get_list_from_conf(obj):
     if type(obj) is str:
-        node_set = NodeSet(obj)
-        return node_set
+        return hostlist.expand_hostlist(obj)
     else:
         return obj
 
