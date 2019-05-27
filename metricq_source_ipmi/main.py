@@ -1,4 +1,5 @@
 import math
+import time
 import logging
 import logging.handlers
 import asyncio
@@ -84,6 +85,7 @@ async def get_ipmi_reading(cfg, current_iteration):
                 value= timestamp, "value"
     """
     query_timestamp = metricq.Timestamp.now()
+    query_time = time.time()
     record_ids = set()
     sensor_names = {}
     for sensor in cfg['sensors']:
@@ -105,7 +107,7 @@ async def get_ipmi_reading(cfg, current_iteration):
             try:
                 value = float(row[3])
             except ValueError:
-                logger.error('ValueError by {} from {}'.format(sensor, name))
+                logger.error('ValueError by {} from {}: {}'.format(sensor, name, row[3]))
                 value = NaN
             ret[metric_name] = (query_timestamp, value)
     if len(sensor_names)*len(cfg['hosts_names']) > len(ret):
@@ -116,6 +118,7 @@ async def get_ipmi_reading(cfg, current_iteration):
                 )
                 if metric_name not in ret:
                     ret[metric_name] = (query_timestamp, NaN)
+    logger.info("Query of {} took {:.2f} seconds".format(hostlist.collect_hostlist(cfg['hosts_names'].values()), time.time() - query_time))
     return ret
 
 
@@ -244,9 +247,11 @@ class IpmiSource(metricq.IntervalSource):
                 for metric_name in data_row:
                     ts, value = data_row[metric_name]
                     send_metrics.append(self[metric_name].send(ts, value))
+            ts_before = time.time()
             if send_metrics:
                 await asyncio.gather(*send_metrics)
-            logger.info("sent {} metrics".format(len(send_metrics)))
+            logger.info("Send took {:.2f} seconds, count: {}".format(
+                time.time() - ts_before, len(send_metrics)))
         if self.current_iteration == self.lcm:
             self.current_iteration = 0
         self.current_iteration += 1
