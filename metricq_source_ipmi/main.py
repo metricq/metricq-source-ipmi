@@ -110,15 +110,28 @@ async def get_ipmi_reading(cfg, current_iteration):
                 logger.error('ValueError by {} from {}: {}'.format(sensor, name, row[3]))
                 value = NaN
             ret[metric_name] = (query_timestamp, value)
+    queried_data = len(ret)
+    unavailable_hosts = 0
     if len(sensor_names)*len(cfg['hosts_names']) > len(ret):
         for host_name in cfg['hosts_names'].values():
+            sensor_counts = 0
             for sensor in cfg['sensors'].values():
                 metric_name = '{}.{}'.format(
                     host_name, sensor['metric_name']
                 )
                 if metric_name not in ret:
+                    sensor_counts += 1
                     ret[metric_name] = (query_timestamp, NaN)
-    logger.info("Query of {} took {:.2f} seconds".format(hostlist.collect_hostlist(cfg['hosts_names'].values()), time.time() - query_time))
+            if sensor_counts == len(cfg['sensors']):
+                unavailable_hosts += 1
+    logger.info("Query of {} took {:.2f} seconds get {} of {} records from query, {} of {} Host are unavailable".format(
+        hostlist.collect_hostlist(cfg['hosts_names'].values()),
+        time.time() - query_time,
+        queried_data,
+        len(sensor_names)*len(cfg['hosts_names']),
+        unavailable_hosts,
+        len(cfg['hosts_names'])
+    ))
     return ret
 
 
@@ -204,6 +217,8 @@ class IpmiSource(metricq.IntervalSource):
                         parsed_output,
                         interval
                     )
+                    if len(metrics) < len(cfg['sensors'])*len(hosts):
+                        continue
                     self.lcm = lcm(self.lcm, new_lcm)
                     self.config_optimized.append(updated_conf)
                 else:
