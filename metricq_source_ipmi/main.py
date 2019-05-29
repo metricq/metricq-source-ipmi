@@ -39,7 +39,7 @@ async def ipmi_sensors(hosts_list, username, password, record_ids=None):
     """
 
     hosts = hostlist.collect_hostlist(hosts_list)
-    fanout = str(min(1024, len(hosts)))
+    fanout = str(min(1024, len(hosts_list)))
     param = [
         IPMI_SENSORS,
         '-h', hosts,
