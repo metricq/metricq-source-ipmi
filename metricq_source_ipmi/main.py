@@ -255,9 +255,9 @@ class IpmiSource(metricq.IntervalSource):
                 jobs.append(get_ipmi_reading(cfg, self.current_iteration))
         data = []
         if jobs:
-            logger.info('start {} get_ipmi_reading jobs'.format(len(jobs)))
+            #logger.info('start {} get_ipmi_reading jobs'.format(len(jobs)))
             data = await asyncio.gather(*jobs)
-            logger.info('jobs finished')
+            #logger.info('jobs finished')
         send_metrics = []
         if data:
             for data_row in data:
