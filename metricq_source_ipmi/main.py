@@ -173,7 +173,7 @@ def create_upd_conf_and_metrics(cfg, hosts, names, parsed_output, conf_interval)
 
             current_lcm = lcm(current_lcm, interval)
             metrics[metric_name] = {
-                'rate': interval,
+                'rate': 1.0 / interval,
                 'unit': cfg['sensors'][sensor].get(
                     'unit',
                     search_sensor_unit(parsed_output, cfg['sensors'][sensor]['name'])
