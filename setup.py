@@ -4,7 +4,7 @@ setup(name='metricq_source_ipmi',
       version='0.1',
       author='TU Dresden',
       python_requires=">=3.6",
-      packages=['metricq_source_ipmi.source', 'metricq_source_ipmi.plugin_hyc_tenant_aperture'],
+      packages=['metricq_source_ipmi.source', 'metricq_source_ipmi.plugin_hyc_tenant'],
       scripts=[],
       entry_points='''
       [console_scripts]

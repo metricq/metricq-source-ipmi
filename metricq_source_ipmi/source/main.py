@@ -124,12 +124,13 @@ async def try_fix_hosts(conf):
 async def collect_periodically(conf, result_queue):
     deadline = time.time() + conf['interval']
     while True:
-        ts, data = await get_sensor_data_dict(
-            conf['hosts_names_dict'].keys(),
-            conf['username'],
-            conf['password'],
-            conf['record_ids'],
-        )
+        if conf['hosts_names_dict'].keys():
+            ts, data = await get_sensor_data_dict(
+                conf['hosts_names_dict'].keys(),
+                conf['username'],
+                conf['password'],
+                conf['record_ids'],
+            )
         to_del = []
         for host, host_name in conf['hosts_names_dict'].items():
             sensors = {}
@@ -343,15 +344,19 @@ class IpmiSource(metricq.IntervalSource):
         logger.info('{} loops started'.format(len(loops)))
 
     async def update(self):
-        send_metrics = []
+        send_metric_count = 0
         while not self.result_queue.empty():
             metric_name, ts, value = self.result_queue.get()
-            send_metrics.append(self[metric_name].send(ts, value))
-        if send_metrics:
-            ts_before = time.time()
-            await asyncio.gather(*send_metrics)
-            logger.info("Send took {:.2f} seconds, count: {}".format(
-                time.time() - ts_before, len(send_metrics)))
+            self[metric_name].append(ts, value)
+            send_metric_count += 1
+        ts_before = time.time()
+        try:
+            await self.flush()
+        except Exception as e:
+            logger.error("Exception in send: {}".format(str(e)))
+        logger.info("Send took {:.2f} seconds, count: {}".format(
+            time.time() - ts_before, send_metric_count),
+        )
 
 
 @click.command()
