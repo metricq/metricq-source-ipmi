@@ -312,6 +312,9 @@ class IpmiSource(metricq.IntervalSource):
     async def _on_config(self, **config):
         self.period = 1
         jobs = []
+        if "ipmi_sensors_cmd" in config:
+            IPMI_SENSORS = config["ipmi_sensors_cmd"]
+
         for cfg in config['ipmi_hosts']:
             jobs.append(
                 create_conf_and_metrics(
