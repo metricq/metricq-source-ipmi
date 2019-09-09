@@ -216,7 +216,7 @@ async def create_conf_and_metrics(conf_part, default_interval):
                 'username': conf_part['username'],
                 'password': conf_part['password'],
                 'hosts_with_error': {},
-                'next_fix_try': (time.time(), 0),
+                'next_fix_try': [time.time(), 0],
             }
 
             if type(metric_data['name']) is str:
