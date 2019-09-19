@@ -258,11 +258,13 @@ async def create_conf_and_metrics(conf_part, default_interval):
             'password': conf_part['password'],
         }
 
+
         for host, host_name in zip(hosts, host_names):
             new_conf['hosts'][host] = {
                 'host_name': host_name,
                 'next_try': time.time(),
                 'number_of_trys': 0,
+
             }
         for metric_sufix, metric_data in conf_part['sensors'].items():
             new_conf['metrics'][metric_sufix] = {}
