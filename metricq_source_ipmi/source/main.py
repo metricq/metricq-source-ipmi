@@ -139,6 +139,7 @@ async def try_fix_hosts(conf, hosts_to_fix):
         else:
             conf['hosts'][host]['status'] = Status.ACTIVE
             conf['hosts'][host]['number_of_trys'] = 0
+            conf['active_hosts'].add(host)
 
 
 async def log_loop(configs, log_interval):
