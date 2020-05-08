@@ -1,4 +1,4 @@
-NEEDED_SENSORS = 4
+NEEDED_SENSORS = 3
 TENANT_STATUS_ENABLED = "'Device Enabled'"
 
 def create_metric_value(sensors):
