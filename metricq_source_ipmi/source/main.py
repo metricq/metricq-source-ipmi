@@ -188,9 +188,9 @@ async def collect_periodically(conf, result_queue):
                             break
                     if not sensors:
                         continue
-                    if 'plugin' in conf:
+                    if 'plugin' in metric_data:
                         try:
-                            value = conf['plugin'].create_metric_value(sensors)
+                            value = metric_data['plugin'].create_metric_value(sensors)
                         except Exception as e:
                             logger.error(
                                 'Error in plugin, Exception: {0}'.format(
