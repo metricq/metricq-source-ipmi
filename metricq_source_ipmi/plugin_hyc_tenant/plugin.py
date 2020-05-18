@@ -1,8 +1,8 @@
-NEEDED_SENSORS = 3
+NEEDED_SENSORS = 4
 TENANT_STATUS_ENABLED = "'Device Enabled'"
 
 def create_metric_value(sensors):
-    if {'HYB_1 Tenant', 'HYB_2 Tenant'}.issubset(sensors.keys()) and len(sensors) == NEEDED_SENSORS:
+    if {'HYB_1 Tenant', 'HYB_2 Tenant'}.issubset(sensors.keys()) and len(sensors) >= NEEDED_SENSORS - 1:
         HYB_1 = float('nan')
         HYB_2 = float('nan')
         for sensor, sensor_data in sensors.items():
