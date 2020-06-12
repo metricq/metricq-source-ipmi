@@ -1,7 +1,9 @@
 import importlib
+import contextlib
 import time
 from queue import Queue
 from enum import Enum
+from typing import Optional, List, Set
 import logging
 import logging.handlers
 import asyncio
@@ -141,7 +143,26 @@ async def try_fix_hosts(conf, hosts_to_fix):
             conf['hosts'][host]['number_of_trys'] = 0
             conf['active_hosts'].add(host)
 
+def long_running_task(task):
+    if not hasattr(long_running_task, "_id"):
+        long_running_task._id = 0
 
+    async def wrapper(*args, **kwargs):
+        long_running_task._id += 1
+        _id = long_running_task._id
+        logger.debug("Starting long running task #{}: {}".format(_id, task.__name__))
+        try:
+            return await task(*args, **kwargs)
+        except asyncio.CancelledError:
+            logger.info(
+                "Cancelled long running task #{}: {}".format(_id, task.__name__)
+            )
+            raise
+
+    return wrapper
+
+
+@long_running_task
 async def log_loop(configs, log_interval):
     while True:
         for conf in configs:
@@ -158,6 +179,7 @@ async def log_loop(configs, log_interval):
         await asyncio.sleep(log_interval)
 
 
+@long_running_task
 async def collect_periodically(conf, result_queue):
     deadline = time.time() + conf['interval']
     while True:
@@ -228,11 +250,38 @@ async def collect_periodically(conf, result_queue):
         deadline += conf['interval']
 
 
+def spawn_collection_loops(
+    complete_conf: List[dict], result_queue: Queue
+) -> Set[asyncio.Task]:
+    logger.info("Starting collection loops...")
+
+    tasks = set(
+        # FIXME: use asyncio.create_task once on Python >=3.7
+        asyncio.ensure_future(collect_periodically(conf, result_queue))
+        for conf in complete_conf
+    )
+
+    logger.info("Started {} collection loop(s)".format(len(tasks)))
+    return tasks
+
+
 def get_hostlist(obj):
     if type(obj) is str:
         return hostlist.expand_hostlist(obj)
     else:
         return obj
+
+
+async def cancel_and_wait(task: Optional[asyncio.Task]):
+    if task is not None:
+        with contextlib.suppress(asyncio.CancelledError):
+            # We explicitly cancel the task.  This causes an
+            # asyncio.CancelledError to be thrown into the task which later
+            # bubbles back up to us when we await its result.  We need to
+            # suppress this exception as not to cancel ourself, then finish
+            # successfully.
+            task.cancel()
+            await task
 
 
 async def create_conf_and_metrics(conf_part, default_interval):
@@ -381,6 +430,8 @@ class IpmiSource(metricq.IntervalSource):
         super().__init__(*args, **kwargs)
         self.period = None
         self.result_queue = Queue()
+        self.collection_loops: Set[asyncio.Task] = set()
+        self.log_loop: Optional[asyncio.Task] = None
         watcher = asyncio.FastChildWatcher()
         watcher.attach_loop(self.event_loop)
         asyncio.set_child_watcher(watcher)
@@ -415,19 +466,22 @@ class IpmiSource(metricq.IntervalSource):
                 len(all_metrics),
             )
         )
-        loops = []
-        for conf in complete_conf:
-            loops.append(
-                collect_periodically(
-                    conf,
-                    self.result_queue,
-                )
-            )
-        loops.append(
-            log_loop(complete_conf, config.get('log_interval', 30)),
+
+        await asyncio.gather(
+            *(cancel_and_wait(task) for task in self.collection_loops),
+            cancel_and_wait(self.log_loop),
         )
-        asyncio.gather(*loops)
-        logger.info('{} loops started'.format(len(loops)))
+        logger.debug("Cancelled old log/collection loops")
+
+        self.collection_loops = spawn_collection_loops(
+            complete_conf, result_queue=self.result_queue,
+        )
+        logger.debug("Set up new collection loops")
+
+        self.log_loop = asyncio.ensure_future(
+            log_loop(complete_conf, log_interval=conf.get("log_interval", 30))
+        )
+        logger.debug("Set up new log loop")
 
     async def update(self):
         send_metric_count = 0
