@@ -199,6 +199,7 @@ async def collect_periodically(conf, result_queue):
                             )
                     else:
                         value = sensors[metric_data['sensors'][0]]['value']
+                    value = value + metric_data['offset']
 
                 elif host_info['status'] == Status.ERROR:
                     if not host in hosts_to_fix and time.time() > host_info['next_try']:
@@ -275,6 +276,8 @@ async def create_conf_and_metrics(conf_part, default_interval):
                     metric_data['name']]
             else:
                 new_conf['metrics'][metric_sufix]['sensors'] = metric_data['name']
+
+            new_conf['metrics'][metric_sufix]['offset'] = metric_data.get('offset', 0)
 
             needed_sensors = 1
             if 'plugin' in metric_data:
