@@ -382,7 +382,6 @@ class IpmiSource(metricq.IntervalSource):
     def __init__(self, *args, **kwargs):
         logger.info("initializing IpmiSource")
         super().__init__(*args, **kwargs)
-        self.period = None
         self.result_queue = Queue()
         watcher = asyncio.FastChildWatcher()
         watcher.attach_loop(self.event_loop)
