@@ -455,6 +455,7 @@ class IpmiSource(metricq.IntervalSource):
                     config.get('interval', 1),
                 )
             )
+        results = []
         if jobs:
             results = await asyncio.gather(*jobs)
         all_metrics = {}
@@ -481,7 +482,7 @@ class IpmiSource(metricq.IntervalSource):
         logger.debug("Set up new collection loops")
 
         self.log_loop = asyncio.ensure_future(
-            log_loop(complete_conf, log_interval=conf.get("log_interval", 30))
+            log_loop(complete_conf, log_interval=config.get("log_interval", 30))
         )
         logger.debug("Set up new log loop")
 
