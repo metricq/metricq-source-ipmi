@@ -12,6 +12,7 @@ import click_log
 
 import metricq
 from metricq.logging import get_logger
+from .version import version as client_version
 import hostlist
 
 IPMI_SENSORS = 'ipmi-sensors'
@@ -455,6 +456,7 @@ class IpmiSource(metricq.IntervalSource):
                     config.get('interval', 1),
                 )
             )
+        results = []
         if jobs:
             results = await asyncio.gather(*jobs)
         all_metrics = {}
@@ -481,7 +483,7 @@ class IpmiSource(metricq.IntervalSource):
         logger.debug("Set up new collection loops")
 
         self.log_loop = asyncio.ensure_future(
-            log_loop(complete_conf, log_interval=conf.get("log_interval", 30))
+            log_loop(complete_conf, log_interval=config.get("log_interval", 30))
         )
         logger.debug("Set up new log loop")
 
@@ -507,9 +509,10 @@ class IpmiSource(metricq.IntervalSource):
 @click.command()
 @click.option('--server', default='amqp://localhost/')
 @click.option('--token', default='source-ipmi')
+@click.version_option(client_version)
 @click_log.simple_verbosity_option(logger)
 def run(server, token):
-    src = IpmiSource(token=token, management_url=server)
+    src = IpmiSource(token=token, management_url=server, client_version=client_version)
     src.run()
 
 

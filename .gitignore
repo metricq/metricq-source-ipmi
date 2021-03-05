@@ -104,3 +104,6 @@ venv.bak/
 .mypy_cache/
 
 metricq_source_ipmi/test_conf.py
+
+# created by setuptools_scm
+metricq_source_ipmi/source/version.py
