@@ -11,7 +11,9 @@ import click
 import click_log
 
 import metricq
+from metricq import Timedelta
 from metricq.logging import get_logger
+
 from .version import version as client_version
 import hostlist
 
@@ -441,7 +443,7 @@ class IpmiSource(metricq.IntervalSource):
 
     @metricq.rpc_handler('config')
     async def _on_config(self, **config):
-        self.period = 1
+        self.period = Timedelta.from_s(1)
         jobs = []
         global CMD_IPMI_SENSORE_BASE
         CMD_IPMI_SENSORE_BASE = build_cmd_ipmi_base(

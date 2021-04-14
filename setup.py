@@ -11,6 +11,12 @@ setup(
       [console_scripts]
       metricq-source-ipmi=metricq_source_ipmi.source:run
       """,
-    install_requires=["aiomonitor", "click", "click_log", "metricq", "python-hostlist"],
+    install_requires=[
+        "aiomonitor",
+        "click",
+        "click_log",
+        "metricq ~= 2.0",
+        "python-hostlist",
+    ],
     use_scm_version=True,
 )
