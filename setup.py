@@ -4,7 +4,7 @@ setup(
     name="metricq_source_ipmi",
     version="0.1",
     author="TU Dresden",
-    python_requires=">=3.6",
+    python_requires=">=3.10",
     packages=["metricq_source_ipmi.source", "metricq_source_ipmi.plugin_hyc_tenant"],
     scripts=[],
     entry_points="""
@@ -15,7 +15,7 @@ setup(
         "aiomonitor",
         "click",
         "click_log",
-        "metricq ~= 3.0",
+        "metricq ~= 4.0",
         "python-hostlist",
     ],
     use_scm_version=True,

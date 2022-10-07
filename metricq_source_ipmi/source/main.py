@@ -437,9 +437,13 @@ class IpmiSource(metricq.IntervalSource):
         self.result_queue = Queue()
         self.collection_loops: Set[asyncio.Task] = set()
         self.log_loop: Optional[asyncio.Task] = None
+
+    async def connect(self) -> None:
         watcher = asyncio.FastChildWatcher()
-        watcher.attach_loop(self.event_loop)
+        watcher.attach_loop(self._event_loop)
         asyncio.set_child_watcher(watcher)
+
+        await super().connect()
 
     @metricq.rpc_handler('config')
     async def _on_config(self, **config):
