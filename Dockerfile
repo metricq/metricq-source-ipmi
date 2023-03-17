@@ -1,4 +1,4 @@
-FROM metricq/metricq-python:v4.2 AS builder
+FROM ghcr.io/metricq/metricq-python:v4.2 AS builder
 LABEL maintainer="mario.bielert@tu-dresden.de"
 
 USER root
@@ -13,7 +13,7 @@ COPY --chown=metricq:metricq . /home/metricq/source-ipmi
 WORKDIR /home/metricq/source-ipmi
 RUN pip install --user .
 
-FROM metricq/metricq-python:v4.2
+FROM ghcr.io/metricq/metricq-python:v4.2
 
 USER root
 RUN apt-get update \
