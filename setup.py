@@ -5,7 +5,7 @@ setup(
     version="0.1",
     author="TU Dresden",
     python_requires=">=3.10",
-    packages=["metricq_source_ipmi.source", "metricq_source_ipmi.plugin_hyc_tenant"],
+    packages=["metricq_source_ipmi.source", "metricq_source_ipmi.plugin_hyc_tenant", "metricq_source_ipmi.plugin_power_supply"],
     scripts=[],
     entry_points="""
       [console_scripts]
