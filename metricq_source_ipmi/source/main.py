@@ -90,6 +90,12 @@ async def get_sensor_data_dict(hosts, username, password, record_ids=None):
         password,
         record_ids=record_ids,
     )
+    if "Sensor Record ID" in data and "not found" in data:
+        ts, data = await ipmi_sensors(
+            hosts,
+            username,
+            password
+        )
 
     data_dict = {}
     for elem in data.splitlines():
