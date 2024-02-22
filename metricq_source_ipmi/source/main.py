@@ -90,12 +90,6 @@ async def get_sensor_data_dict(hosts, username, password, record_ids=None):
         password,
         record_ids=record_ids,
     )
-    if "Sensor Record ID" in data and "not found" in data:
-        ts, data = await ipmi_sensors(
-            hosts,
-            username,
-            password
-        )
 
     data_dict = {}
     for elem in data.splitlines():
@@ -133,9 +127,10 @@ async def try_fix_hosts(conf, hosts_to_fix):
         for metric_sufix, metric_data in conf['metrics'].items():
             for sensor in metric_data['sensors']:
                 try:
-                    conf['record_ids'].add(
-                        data[sensor][host]['record_id'],
-                    )
+                    if conf['record_ids'] != None:
+                        conf['record_ids'].add(
+                            data[sensor][host]['record_id'],
+                        )
                 except KeyError:
                     conf['hosts'][host]['next_try'] = now + \
                         RETRY_INTERVALS[
@@ -308,7 +303,7 @@ async def create_conf_and_metrics(conf_part, default_interval):
         interval = conf_part.get('interval', default_interval)
         new_conf = {
             'metrics': {},
-            'record_ids': set(),
+            'record_ids': conf_part['record_ids'] if 'record_ids' in conf_part.keys() else set(),
             'hosts': {},
             # 'active_hosts' serves for performance.
             # That not always an additional loop has to be made to check who is active.
@@ -370,9 +365,10 @@ async def create_conf_and_metrics(conf_part, default_interval):
             for host, host_name in zip(hosts, host_names):
                 for sensor in new_conf['metrics'][metric_sufix]['sensors']:
                     try:
-                        new_conf['record_ids'].add(
-                            queried_sensor_data[sensor][host]['record_id'],
-                        )
+                        if new_conf['record_ids'] != None:
+                            new_conf['record_ids'].add(
+                                queried_sensor_data[sensor][host]['record_id'],
+                            )
                     except KeyError:
                         new_conf['hosts'][host]['status'] = Status.ERROR
                         if host in new_conf['active_hosts']:
