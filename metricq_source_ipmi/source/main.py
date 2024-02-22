@@ -303,7 +303,7 @@ async def create_conf_and_metrics(conf_part, default_interval):
         interval = conf_part.get('interval', default_interval)
         new_conf = {
             'metrics': {},
-            'record_ids': conf_part['record_ids'] if 'record_ids' in conf_part.keys() else set(),
+            'record_ids': None if conf_part.get('disable_record_ids', False) else set(),
             'hosts': {},
             # 'active_hosts' serves for performance.
             # That not always an additional loop has to be made to check who is active.
