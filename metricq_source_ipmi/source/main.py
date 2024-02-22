@@ -127,7 +127,7 @@ async def try_fix_hosts(conf, hosts_to_fix):
         for metric_sufix, metric_data in conf['metrics'].items():
             for sensor in metric_data['sensors']:
                 try:
-                    if conf['record_ids'] != None:
+                    if conf['record_ids'] is not None:
                         conf['record_ids'].add(
                             data[sensor][host]['record_id'],
                         )
@@ -365,7 +365,7 @@ async def create_conf_and_metrics(conf_part, default_interval):
             for host, host_name in zip(hosts, host_names):
                 for sensor in new_conf['metrics'][metric_sufix]['sensors']:
                     try:
-                        if new_conf['record_ids'] != None:
+                        if new_conf['record_ids'] is not None:
                             new_conf['record_ids'].add(
                                 queried_sensor_data[sensor][host]['record_id'],
                             )
