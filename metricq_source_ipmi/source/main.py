@@ -13,6 +13,7 @@ import click_log
 import metricq
 from metricq import Timedelta
 from metricq.logging import get_logger
+from metricq.cli import metricq_command
 
 from .version import version as client_version
 import hostlist
@@ -514,11 +515,8 @@ class IpmiSource(metricq.IntervalSource):
         )
 
 
-@click.command()
-@click.option('--server', default='amqp://localhost/')
-@click.option('--token', default='source-ipmi')
+@metricq_command(default_token="source-ipmi")
 @click.version_option(client_version)
-@click_log.simple_verbosity_option(logger)
 def run(server, token):
     src = IpmiSource(token=token, management_url=server, client_version=client_version)
     src.run()
