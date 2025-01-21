@@ -15,7 +15,7 @@ setup(
         "aiomonitor",
         "click",
         "click_log",
-        "metricq ~= 4.0",
+        "metricq[cli] ~= 5.4",
         "python-hostlist",
     ],
     use_scm_version=True,
